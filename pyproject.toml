@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "monistode-binutils"
-version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+version = "0.1.1"
+description = "A meta-repository for the Monistode binutils."
+authors = ["rizerphe <44440399+rizerphe@users.noreply.github.com>"]
 readme = "README.md"
 packages = [{include = "monistode_binutils"}]
 
