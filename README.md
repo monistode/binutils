@@ -75,7 +75,7 @@ YELP $2
 YELP $43
 YELP $17
 
-JMP main
+JMP main + 138
 
 main:
 YELP $24
@@ -93,15 +93,29 @@ Parameters:
   Data address: 16
 Sections:
   Name: text
-  Size: 24 bytes (18 bytes of disk)
+  Size: 24 entries (18 bytes of disk)
+
+  Name: symbol_table
+  Size: 2 entries (36 bytes of disk)
+
+  Name: relocation_table
+  Size: 1 entries (33 bytes of disk)
+
 
 .text
-    start:
-000000000000b0: yelp  $512 # 000001 000000 001000 000000
-0000000000b100: yelp  $2   # 000001 000000 000000 000010
-000000000b1000: yelp  $43  # 000001 000000 000000 101011
-000000000b1100: yelp  $17  # 000001 000000 000000 010001
-00000000b10000: jmp  0     # 000010 000000 000000 000000
+    _start:
+0000: yelp  $512      # 000001 000000 001000 000000
+0004: yelp  $2        # 000001 000000 000000 000010
+0008: yelp  $43       # 000001 000000 000000 101011
+000c: yelp  $17       # 000001 000000 000000 010001
+0010: jmp  main + 138 # 000010 000000 000010 000111
     main:
-00000000b10100: yelp  $24  # 000001 000000 000000 011000
+0014: yelp  $24       # 000001 000000 000000 011000
+
+.symbol_table
+      text:00000000        _start
+      text:00000014        main
+
+.relocation_table
+      text:00000011 + 2bits (16-bit)        text -> main, relative
 ```
