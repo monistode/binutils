@@ -233,33 +233,33 @@ files = [
 
 [[package]]
 name = "monistode-assembler"
-version = "0.1.5"
+version = "0.1.13"
 description = "An assembler for the Monistode set of ISA's"
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_assembler-0.1.5-py3-none-any.whl", hash = "sha256:fe6334ca6b8a372b15e7dafd6c785822647401059b473fc376633aa209bf84df"},
-    {file = "monistode_assembler-0.1.5.tar.gz", hash = "sha256:65211a9aafcff15a6b34c466461ba7113f9223b5a1d42cdeb2a0867d9d40beea"},
+    {file = "monistode_assembler-0.1.13-py3-none-any.whl", hash = "sha256:5f36ed439b7f893da83169155d78c1dfda39be3962622c0381467eb622b4601e"},
+    {file = "monistode_assembler-0.1.13.tar.gz", hash = "sha256:f7a3cd70cd5171db8b977fd0360025caa9fec9ebe5ca14f6204626814825d4af"},
 ]
 
 [package.dependencies]
 clck = ">=1.0.0,<2.0.0"
 click = ">=8.1.7,<9.0.0"
-monistode-binutils-shared = ">=0.1.3,<0.2.0"
+monistode-binutils-shared = "0.1.14"
 pydantic = ">=2.4.2,<3.0.0"
 pyyaml = ">=6.0.1,<7.0.0"
 
 [[package]]
 name = "monistode-binutils-shared"
-version = "0.1.7"
+version = "0.1.14"
 description = "A collection of tools shared among the monistode binutils."
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_binutils_shared-0.1.7-py3-none-any.whl", hash = "sha256:f8c0a7e40e3ab39b8b0e33df62b513a7eb8731ccbe8cde3f597432e6d74117cc"},
-    {file = "monistode_binutils_shared-0.1.7.tar.gz", hash = "sha256:b57e367b612a8ff6157d41455b4be7cfb13dfa08d940ef97e5810a856e80835b"},
+    {file = "monistode_binutils_shared-0.1.14-py3-none-any.whl", hash = "sha256:b52afc8068bcf7a48f6d976dbf55ec7854388309eb4462dc70a53b87d863f393"},
+    {file = "monistode_binutils_shared-0.1.14.tar.gz", hash = "sha256:7f9a702e145b247768c95b6e0c53ce92bc6a3c95a0ece9c01f0e1e131b42af9a"},
 ]
 
 [package.dependencies]
@@ -267,19 +267,19 @@ bitstruct = ">=8.18.0,<9.0.0"
 
 [[package]]
 name = "monistode-linker"
-version = "0.1.0"
+version = "0.1.2"
 description = "A linker for the Monistode set of ISA's"
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_linker-0.1.0-py3-none-any.whl", hash = "sha256:7f91875caa5e8f448f4aea6443c3f77b504732413a1a28f343bb62ce3b82a40b"},
-    {file = "monistode_linker-0.1.0.tar.gz", hash = "sha256:4bd61fce87d15f5fc97c16910a497925641211bf8dc3672b5314ca6aabbd8edb"},
+    {file = "monistode_linker-0.1.2-py3-none-any.whl", hash = "sha256:b960c86fd211cbb70378df3194106b04dc0d69665911dc4ff4ead77b34720852"},
+    {file = "monistode_linker-0.1.2.tar.gz", hash = "sha256:45be29d3e1e00b79ec6606036308cf3fbe9461936ebc28dc15706f33947caa64"},
 ]
 
 [package.dependencies]
 click = ">=8.1.7,<9.0.0"
-monistode-binutils-shared = "0.1.7"
+monistode-binutils-shared = "0.1.14"
 
 [[package]]
 name = "pydantic"
@@ -535,4 +535,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "33c5ccedab630bc359ddc08921188f8feb72cdb38205154bdf7212ea5027c68b"
+content-hash = "3656dd3e1ff3112187d129b8117259815218a69b72186f6cc6ae353b2ad4f43c"
