@@ -233,14 +233,14 @@ files = [
 
 [[package]]
 name = "monistode-assembler"
-version = "0.1.13"
+version = "0.1.14"
 description = "An assembler for the Monistode set of ISA's"
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_assembler-0.1.13-py3-none-any.whl", hash = "sha256:5f36ed439b7f893da83169155d78c1dfda39be3962622c0381467eb622b4601e"},
-    {file = "monistode_assembler-0.1.13.tar.gz", hash = "sha256:f7a3cd70cd5171db8b977fd0360025caa9fec9ebe5ca14f6204626814825d4af"},
+    {file = "monistode_assembler-0.1.14-py3-none-any.whl", hash = "sha256:6e09cbed066ec913716d47b7af43fc9706c59cf70708a192994d8e5efdb96d2b"},
+    {file = "monistode_assembler-0.1.14.tar.gz", hash = "sha256:0fc3499ea874f93b8b5d35e0b7b738466be4c78336851942d422a6c0ab870a8a"},
 ]
 
 [package.dependencies]
@@ -535,4 +535,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "3656dd3e1ff3112187d129b8117259815218a69b72186f6cc6ae353b2ad4f43c"
+content-hash = "adc17f566d33b2d7d530637fd670d0d770b649f0dc3c7a83d9b1f037657c9327"
