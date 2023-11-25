@@ -233,14 +233,14 @@ files = [
 
 [[package]]
 name = "monistode-assembler"
-version = "0.1.15"
+version = "0.1.16"
 description = "An assembler for the Monistode set of ISA's"
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_assembler-0.1.15-py3-none-any.whl", hash = "sha256:0baf0c9f5a1d2c24ec7ae9c6106ad39ef5f7f3d4bd2ca2a3d4a977487d23a17f"},
-    {file = "monistode_assembler-0.1.15.tar.gz", hash = "sha256:c5db50bfe398fb1f399722bc6717fd08ecc6f1f27adf1b979c67991d7d35b133"},
+    {file = "monistode_assembler-0.1.16-py3-none-any.whl", hash = "sha256:6466d665396b56674407b6f4b5d9e8b30fd75a378e408f058fcedefc2d93988c"},
+    {file = "monistode_assembler-0.1.16.tar.gz", hash = "sha256:751a156b87ad995286aeed386b9bf5a92584812cc681fb52216c96e1b068fcde"},
 ]
 
 [package.dependencies]
@@ -267,14 +267,14 @@ bitstruct = ">=8.18.0,<9.0.0"
 
 [[package]]
 name = "monistode-linker"
-version = "0.1.4"
+version = "0.1.5"
 description = "A linker for the Monistode set of ISA's"
 category = "main"
 optional = false
 python-versions = ">=3.11,<4.0"
 files = [
-    {file = "monistode_linker-0.1.4-py3-none-any.whl", hash = "sha256:a7e72acf9c25d8415e99997be48ea871a654c288d6a3d1b35f7790334ccb4303"},
-    {file = "monistode_linker-0.1.4.tar.gz", hash = "sha256:d97b61033d3c3edb5f4d9b28a114a44ac43341a8b89a310a44976b2fe62d3e0c"},
+    {file = "monistode_linker-0.1.5-py3-none-any.whl", hash = "sha256:89bd89b93d125791d6d648be402d1b27fdb44dc75a280d60449a0bbae52a081b"},
+    {file = "monistode_linker-0.1.5.tar.gz", hash = "sha256:c65d938a5648b6d0b3fdfcc712a42bf04b4303b96648cf98e747270a0c1a032f"},
 ]
 
 [package.dependencies]
@@ -535,4 +535,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "78ed67e172934e7341651f5b629ebe10630fa93f10e31bcbb7322b4fe04db548"
+content-hash = "b28ab8a9caa6cd39de8844a3a8197f3ea6bad2e0fcb2f66359136b549ccd3dd0"
