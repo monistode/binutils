@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "monistode-binutils"
-version = "0.1.8"
+version = "0.1.9"
 description = "A meta-repository for the Monistode binutils."
 authors = ["rizerphe <44440399+rizerphe@users.noreply.github.com>"]
 readme = "README.md"
@@ -9,7 +9,7 @@ packages = [{include = "monistode_binutils"}]
 [tool.poetry.dependencies]
 python = "^3.11"
 monistode-assembler = "^0.1.16"
-monistode-linker = "^0.1.5"
+monistode-linker = "^0.1.6"
 
 
 [build-system]
