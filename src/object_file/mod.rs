@@ -13,8 +13,6 @@ pub use relocations::{RelocationTable, Relocation};
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
     header: ObjectHeader,
-    symbol_table: Option<SymbolTable>,
-    relocation_table: Option<RelocationTable>,
     sections: Vec<Section>,
 }
 
@@ -22,9 +20,9 @@ impl Serializable for ObjectFile {
     fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
         
-        // Create symbol and relocation tables - ensure we only use one of each
-        let mut symbol_table = self.symbol_table.clone().unwrap_or_else(SymbolTable::new);
-        let mut relocation_table = self.relocation_table.clone().unwrap_or_else(RelocationTable::new);
+        // Create symbol and relocation tables from section data
+        let mut symbol_table = SymbolTable::new();
+        let mut relocation_table = RelocationTable::new();
         
         for (section_id, section) in self.sections.iter().enumerate() {
             for symbol in section.symbols() {
@@ -49,20 +47,18 @@ impl Serializable for ObjectFile {
         let mut section_data = Vec::new();
         let mut headers = Vec::new();
 
-        // Add regular section headers and data first
+        // Add symbol and relocation table headers first
+        headers.push(symbol_header);
+        section_data.extend(symbol_data);
+        headers.push(relocation_header);
+        section_data.extend(relocation_data);
+
+        // Add regular section headers and data next
         for section in &self.sections {
             let (header, bytes) = section.serialize();
             headers.push(header);
             section_data.extend(bytes);
         }
-
-        // Add symbol table header and data last
-        headers.push(symbol_header);
-        section_data.extend(symbol_data);
-
-        // Add relocation table header and data last
-        headers.push(relocation_header);
-        section_data.extend(relocation_data);
 
         // Add all headers followed by all section data
         for header in headers {
@@ -93,20 +89,20 @@ impl Serializable for ObjectFile {
             offset += size;
         }
 
-        // Last two sections must be symbol table and relocation table
+        // First two sections must be symbol table and relocation table
         let section_count = headers.len();
         if section_count < 2 {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[section_count - 2], SectionHeader::SymbolTable(_)) {
+        if !matches!(headers[0], SectionHeader::SymbolTable(_)) {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[section_count - 1], SectionHeader::RelocationTable(_)) {
+        if !matches!(headers[1], SectionHeader::RelocationTable(_)) {
             return Err(SerializationError::InvalidData);
         }
 
         // Ensure no other symbol/relocation table sections exist
-        if headers[..section_count-2].iter().any(|h| matches!(h, 
+        if headers[2..].iter().any(|h| matches!(h, 
             SectionHeader::SymbolTable(_) | SectionHeader::RelocationTable(_))) {
             return Err(SerializationError::InvalidData);
         }
@@ -117,31 +113,10 @@ impl Serializable for ObjectFile {
         let mut relocation_table = None;
         let mut section_data_offset = offset;
         
-        // Process sections in new order
-        for (idx, section_header) in headers.iter().enumerate() {
-            if data.len() < section_data_offset {
-                return Err(SerializationError::DataTooShort);
-            }
-
+        // Process symbol and relocation tables first
+        for (idx, section_header) in headers.iter().enumerate().take(2) {
             match (idx, section_header) {
-                (i, SectionHeader::Text(_)) if i < section_count - 2 => {
-                    let symbols = symbol_table.as_ref()
-                        .map(|st: &SymbolTable| st.get_symbols(i))
-                        .unwrap_or_default();
-                    let relocations = relocation_table.as_ref()
-                        .map(|rt: &RelocationTable| rt.get_relocations(i))
-                        .unwrap_or_default();
-                    let (size, section) = Section::deserialize(
-                        section_header,
-                        &data[section_data_offset..],
-                        header.architecture,
-                        symbols,
-                        relocations
-                    )?;
-                    sections.push(section);
-                    section_data_offset += size;
-                }
-                (i, SectionHeader::SymbolTable(symbol_header)) if i == section_count - 2 => {
+                (0, SectionHeader::SymbolTable(symbol_header)) => {
                     let (size, table) = SymbolTable::deserialize(
                         symbol_header,
                         &data[section_data_offset..],
@@ -149,7 +124,7 @@ impl Serializable for ObjectFile {
                     symbol_table = Some(table);
                     section_data_offset += size;
                 }
-                (i, SectionHeader::RelocationTable(relocation_header)) if i == section_count - 1 => {
+                (1, SectionHeader::RelocationTable(relocation_header)) => {
                     let (size, table) = RelocationTable::deserialize(
                         relocation_header,
                         &data[section_data_offset..],
@@ -161,10 +136,31 @@ impl Serializable for ObjectFile {
             }
         }
 
+        // Process remaining sections with the loaded tables
+        let symbol_table = symbol_table.ok_or(SerializationError::InvalidData)?;
+        let relocation_table = relocation_table.ok_or(SerializationError::InvalidData)?;
+
+        for (idx, section_header) in headers.iter().enumerate().skip(2) {
+            match section_header {
+                SectionHeader::Text(_) => {
+                    let symbols = symbol_table.get_symbols(idx - 2);
+                    let relocations = relocation_table.get_relocations(idx - 2);
+                    let (size, section) = Section::deserialize(
+                        section_header,
+                        &data[section_data_offset..],
+                        header.architecture,
+                        symbols,
+                        relocations
+                    )?;
+                    sections.push(section);
+                    section_data_offset += size;
+                }
+                _ => return Err(SerializationError::InvalidData),
+            }
+        }
+
         Ok((section_data_offset, ObjectFile { 
-            header, 
-            symbol_table,
-            relocation_table,
+            header,
             sections 
         }))
     }
