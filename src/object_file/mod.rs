@@ -1,14 +1,17 @@
 mod serializable;
 mod header;
 pub mod sections;
+pub mod symbols;
 
 pub use serializable::{Architecture, Serializable};
 pub use header::ObjectHeader;
 pub use sections::*;
+pub use symbols::{Address, Symbol, SymbolTable, SymbolTableHeader};
 
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
     header: ObjectHeader,
+    symbol_table: Option<SymbolTable>,
     sections: Vec<Section>,
 }
 
@@ -23,6 +26,16 @@ impl Serializable for ObjectFile {
         };
         data.extend(header.serialize());
 
+        // Create and serialize symbol table
+        let mut symbol_table = SymbolTable::new();
+        for (section_id, section) in self.sections.iter().enumerate() {
+            for symbol in section.symbols() {
+                symbol_table.add_symbol(section_id, symbol);
+            }
+        }
+        let (symbol_header, symbol_data) = symbol_table.serialize();
+        data.extend(symbol_header.serialize());
+
         // Create and serialize section headers and data
         let mut section_data = Vec::new();
         let mut headers = Vec::new();
@@ -33,20 +46,30 @@ impl Serializable for ObjectFile {
             section_data.extend(bytes);
         }
 
-        // Serialize section headers
+        // Add section headers
         for header in headers {
             data.extend(header.serialize());
         }
 
-        // Add section data
+        // Add symbol table data and section data
+        data.extend(symbol_data);
         data.extend(section_data);
+        
         data
     }
 
     fn deserialize(data: &[u8]) -> (usize, Self) {
         let (header_size, header) = ObjectHeader::deserialize(data);
         let mut offset = header_size;
-        
+
+        // Parse symbol table header
+        let (symbol_header_size, symbol_header) = SymbolTableHeader::deserialize(&data[offset..]);
+        offset += symbol_header_size;
+
+        // Parse symbol table data
+        let (symbol_table_size, symbol_table) = SymbolTable::deserialize(&symbol_header, &data[offset..]);
+        offset += symbol_table_size;
+
         // Read section headers
         let mut headers = Vec::new();
         for _ in 0..header.section_count {
@@ -69,6 +92,10 @@ impl Serializable for ObjectFile {
             section_data_offset += size;
         }
 
-        (section_data_offset, ObjectFile { header, sections })
+        (section_data_offset, ObjectFile { 
+            header, 
+            symbol_table: Some(symbol_table), 
+            sections 
+        })
     }
 }

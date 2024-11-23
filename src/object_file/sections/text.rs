@@ -1,9 +1,11 @@
 use bitvec::prelude::*;
 use crate::object_file::serializable::{Architecture, Serializable};
+use crate::object_file::symbols::Symbol;
 
 #[derive(Debug, Clone)]
 pub struct TextSection {
     pub data: BitVec,
+    pub symbols: Vec<Symbol>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,10 @@ pub enum SectionHeader {
 }
 
 impl TextSection {
+    pub fn new(data: BitVec, symbols: Vec<Symbol>) -> Self {
+        TextSection { data, symbols }
+    }
+
     pub fn serialize(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
         for i in 0..((self.data.len() + 7) / 8) {
@@ -42,7 +48,7 @@ impl TextSection {
                             bits.push(bit);
                         }
                         let bytes_read = (header.bit_length + 7) as usize / 8;
-                        (bytes_read, TextSection { data: bits })
+                        (bytes_read, TextSection { data: bits, symbols: Vec::new() })
                     },
                     _ => {
                         let mut bits = BitVec::new();
@@ -50,7 +56,7 @@ impl TextSection {
                             let bit = data[i / 8] & (1 << (i % 8)) != 0;
                             bits.push(bit);
                         }
-                        (header.bit_length as usize, TextSection { data: bits })
+                        (header.bit_length as usize, TextSection { data: bits, symbols: Vec::new() })
                     }
                 }
             }

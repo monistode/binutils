@@ -1,4 +1,5 @@
 use crate::object_file::serializable::{Architecture, Serializable};
+use crate::object_file::symbols::Symbol;
 
 #[derive(Debug, Clone)]
 pub enum Section {
@@ -24,6 +25,12 @@ impl Section {
                 let (size, section) = super::text::TextSection::deserialize(header, data, architecture);
                 (size, Section::Text(section))
             }
+        }
+    }
+
+    pub fn symbols(&self) -> Vec<Symbol> {
+        match self {
+            Section::Text(text) => text.symbols.clone(),
         }
     }
 }
