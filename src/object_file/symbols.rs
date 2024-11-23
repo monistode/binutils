@@ -1,4 +1,5 @@
 use super::serializable::*;
+use super::sections::SectionHeader;
 
 #[derive(Debug, Clone)]
 pub struct Address(pub usize);
@@ -21,37 +22,6 @@ struct SymbolEntry {
     section_id: usize,
     offset: Address,
     name_offset: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct SymbolTableHeader {
-    entry_count: u32,
-    names_length: u32,
-}
-
-impl Serializable for SymbolTableHeader {
-    fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(9);
-        data.push(255); // Special section type for symbol table
-        data.extend(self.entry_count.to_le_bytes());
-        data.extend(self.names_length.to_le_bytes());
-        data
-    }
-
-    fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError> {
-        if data.len() < 9 {
-            return Err(SerializationError::DataTooShort);
-        }
-
-        if data[0] != 255 {
-            return Err(SerializationError::InvalidSymbolTableHeader);
-        }
-
-        let entry_count = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
-        let names_length = u32::from_le_bytes([data[5], data[6], data[7], data[8]]);
-        
-        Ok((9, SymbolTableHeader { entry_count, names_length }))
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +50,7 @@ impl SymbolTable {
         });
     }
 
-    pub fn serialize(&self) -> (SymbolTableHeader, Vec<u8>) {
+    pub fn serialize(&self) -> (SectionHeader, Vec<u8>) {
         let mut data = Vec::new();
         
         // Entries
@@ -93,7 +63,8 @@ impl SymbolTable {
         // Names
         data.extend(&self.names);
 
-        let header = SymbolTableHeader {
+        let total_size = data.len() as u64;
+        let header = SectionHeader::SymbolTable {
             entry_count: self.entries.len() as u32,
             names_length: self.names.len() as u32,
         };
@@ -101,62 +72,67 @@ impl SymbolTable {
         (header, data)
     }
 
-    pub fn deserialize(header: &SymbolTableHeader, data: &[u8]) -> Result<(usize, Self), SerializationError> {
-        let required_size = (header.entry_count as usize * 12) + header.names_length as usize;
-        if data.len() < required_size {
-            return Err(SerializationError::DataTooShort);
-        }
+    pub fn deserialize(header: &SectionHeader, data: &[u8]) -> Result<(usize, Self), SerializationError> {
+        match header {
+            SectionHeader::SymbolTable { entry_count, names_length } => {
+                let required_size = (*entry_count as usize * 12) + *names_length as usize;
+                if data.len() < required_size {
+                    return Err(SerializationError::DataTooShort);
+                }
 
-        let mut offset = 0;
-        let mut entries = Vec::new();
+                let mut offset = 0;
+                let mut entries = Vec::new();
 
-        // Read entries
-        for _ in 0..header.entry_count {
-            if offset + 12 > data.len() {
-                return Err(SerializationError::DataTooShort);
+                // Read entries
+                for _ in 0..*entry_count {
+                    if offset + 12 > data.len() {
+                        return Err(SerializationError::DataTooShort);
+                    }
+
+                    let section_id = u32::from_le_bytes([
+                        data[offset], data[offset + 1],
+                        data[offset + 2], data[offset + 3],
+                    ]) as usize;
+                    offset += 4;
+
+                    let addr = u32::from_le_bytes([
+                        data[offset], data[offset + 1],
+                        data[offset + 2], data[offset + 3],
+                    ]) as usize;
+                    offset += 4;
+
+                    let name_offset = u32::from_le_bytes([
+                        data[offset], data[offset + 1],
+                        data[offset + 2], data[offset + 3],
+                    ]) as usize;
+                    offset += 4;
+
+                    if name_offset >= *names_length as usize {
+                        return Err(SerializationError::InvalidData);
+                    }
+
+                    entries.push(SymbolEntry {
+                        section_id,
+                        offset: Address(addr),
+                        name_offset,
+                    });
+                }
+
+                // Read names
+                if offset + *names_length as usize > data.len() {
+                    return Err(SerializationError::DataTooShort);
+                }
+                let names = data[offset..offset + *names_length as usize].to_vec();
+                
+                // Validate that all names are properly null-terminated
+                if !names.iter().any(|&b| b == 0) {
+                    return Err(SerializationError::InvalidData);
+                }
+
+                Ok((offset + *names_length as usize, SymbolTable { entries, names }))
             }
-
-            let section_id = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
-            ]) as usize;
-            offset += 4;
-
-            let addr = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
-            ]) as usize;
-            offset += 4;
-
-            let name_offset = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
-            ]) as usize;
-            offset += 4;
-
-            if name_offset >= header.names_length as usize {
-                return Err(SerializationError::InvalidData);
-            }
-
-            entries.push(SymbolEntry {
-                section_id,
-                offset: Address(addr),
-                name_offset,
-            });
+            _ => Err(SerializationError::InvalidSymbolTableHeader),
         }
-
-        // Read names
-        if offset + header.names_length as usize > data.len() {
-            return Err(SerializationError::DataTooShort);
-        }
-        let names = data[offset..offset + header.names_length as usize].to_vec();
-        
-        // Validate that all names are properly null-terminated
-        if !names.iter().any(|&b| b == 0) {
-            return Err(SerializationError::InvalidData);
-        }
-
-        Ok((offset + header.names_length as usize, SymbolTable { entries, names }))
     }
 
     pub fn get_symbols(&self) -> Vec<Symbol> {

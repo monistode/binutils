@@ -25,9 +25,12 @@ impl Section {
         architecture: Architecture
     ) -> Result<(usize, Self), SerializationError> {
         match header {
-            super::text::SectionHeader::Text { .. } => {
+            super::text::SectionHeader::Text(header) => {
                 let (size, section) = super::text::TextSection::deserialize(header, data, architecture)?;
                 Ok((size, Section::Text(section)))
+            }
+            super::text::SectionHeader::SymbolTable { .. } => {
+                Err(SerializationError::InvalidSectionType(0))
             }
         }
     }
