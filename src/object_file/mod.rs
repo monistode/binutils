@@ -1,97 +1,10 @@
-use bitvec::prelude::*;
+mod serializable;
+mod header;
+pub mod sections;
 
-pub trait Serializable {
-    fn serialize(&self) -> Vec<u8>;
-    fn deserialize(data: &[u8]) -> (usize, Self);
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Architecture {
-    Stack = 0,
-}
-
-#[derive(Debug, Clone)]
-pub struct ObjectHeader {
-    architecture: Architecture,
-}
-
-impl Serializable for ObjectHeader {
-    fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        data.push(self.architecture as u8);
-        data
-    }
-
-    fn deserialize(data: &[u8]) -> (usize, Self) {
-        (
-            1,
-            ObjectHeader {
-                architecture: match data[0] {
-                    0 => Architecture::Stack,
-                    _ => panic!("Invalid architecture"),
-                },
-            },
-        )
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TextSection {
-    pub data: BitVec,
-}
-
-impl Serializable for TextSection {
-    fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        data.extend(self.data.len().to_le_bytes().iter());
-
-        let words = self.data.as_raw_slice();
-        for word in words {
-            data.extend(word.to_le_bytes().iter());
-        }
-        data
-    }
-
-    fn deserialize(data: &[u8]) -> (usize, Self) {
-        let size = u64::from_le_bytes([
-            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-        ]) as usize;
-        let mut bits = BitVec::new();
-        for i in 0..size {
-            let bit = data[8 + i / 8] & (1 << (i % 8)) != 0;
-            bits.push(bit);
-        }
-        (size + 8, TextSection { data: bits })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Section {
-    Text(TextSection),
-}
-
-impl Serializable for Section {
-    fn serialize(&self) -> Vec<u8> {
-        match self {
-            Section::Text(section) => {
-                let mut data = Vec::new();
-                data.push(0);
-                data.extend(section.serialize());
-                data
-            }
-        }
-    }
-
-    fn deserialize(data: &[u8]) -> (usize, Self) {
-        match data[0] {
-            0 => {
-                let (size, section) = TextSection::deserialize(&data[1..]);
-                (size + 1, Section::Text(section))
-            }
-            _ => panic!("Invalid section type"),
-        }
-    }
-}
+pub use serializable::{Architecture, Serializable};
+pub use header::ObjectHeader;
+pub use sections::*;
 
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
@@ -102,22 +15,60 @@ pub struct ObjectFile {
 impl Serializable for ObjectFile {
     fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        data.extend(self.header.serialize());
+        
+        // Serialize header
+        let header = ObjectHeader {
+            architecture: self.header.architecture,
+            section_count: self.sections.len() as u64,
+        };
+        data.extend(header.serialize());
+
+        // Create and serialize section headers and data
+        let mut section_data = Vec::new();
+        let mut headers = Vec::new();
+
         for section in &self.sections {
-            data.extend(section.serialize());
+            let (header, bytes) = section.serialize();
+            headers.push(header);
+            section_data.extend(bytes);
         }
+
+        // Serialize section headers
+        for header in headers {
+            data.extend(header.serialize());
+        }
+
+        // Add section data
+        data.extend(section_data);
         data
     }
 
     fn deserialize(data: &[u8]) -> (usize, Self) {
         let (header_size, header) = ObjectHeader::deserialize(data);
-        let mut sections = Vec::new();
         let mut offset = header_size;
-        while offset < data.len() {
-            let (size, section) = Section::deserialize(&data[offset..]);
-            sections.push(section);
+        
+        // Read section headers
+        let mut headers = Vec::new();
+        for _ in 0..header.section_count {
+            let (size, section_header) = SectionHeader::deserialize(&data[offset..]);
+            headers.push(section_header);
             offset += size;
         }
-        (offset, ObjectFile { header, sections })
+
+        // Read sections
+        let mut sections = Vec::new();
+        let mut section_data_offset = offset;
+        
+        for section_header in &headers {
+            let (size, section) = Section::deserialize(
+                section_header,
+                &data[section_data_offset..],
+                header.architecture,
+            );
+            sections.push(section);
+            section_data_offset += size;
+        }
+
+        (section_data_offset, ObjectFile { header, sections })
     }
 }
