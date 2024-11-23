@@ -6,7 +6,7 @@ pub mod symbols;
 pub use serializable::{Architecture, Serializable, SerializationError};
 pub use header::ObjectHeader;
 pub use sections::*;
-pub use symbols::{Address, Symbol, SymbolTable};
+pub use symbols::{SymbolTable, Symbol, Address};
 
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
@@ -35,11 +35,11 @@ impl Serializable for ObjectFile {
         };
         data.extend(header.serialize());
 
-        // Create and serialize all section headers
+        // Create and serialize all section headers and data
         let mut section_data = Vec::new();
         let mut headers = Vec::new();
 
-        // Add symbol table header first
+        // Add symbol table header and data first
         headers.push(symbol_header);
         section_data.extend(symbol_data);
 
@@ -50,12 +50,10 @@ impl Serializable for ObjectFile {
             section_data.extend(bytes);
         }
 
-        // Add all section headers
+        // Add all headers followed by all section data
         for header in headers {
             data.extend(header.serialize());
         }
-
-        // Add all section data
         data.extend(section_data);
         
         data
@@ -82,12 +80,15 @@ impl Serializable for ObjectFile {
         }
 
         // First section must be symbol table
-        if headers.is_empty() || headers[0].section_type != SectionType::SymbolTable {
+        if headers.is_empty() {
+            return Err(SerializationError::InvalidData);
+        }
+        if !matches!(headers[0], SectionHeader::SymbolTable(_)) {
             return Err(SerializationError::InvalidData);
         }
 
         // Ensure no other symbol table sections exist
-        if headers[1..].iter().any(|h| h.section_type == SectionType::SymbolTable) {
+        if headers[1..].iter().any(|h| matches!(h, SectionHeader::SymbolTable(_))) {
             return Err(SerializationError::InvalidData);
         }
 
@@ -102,23 +103,27 @@ impl Serializable for ObjectFile {
                 return Err(SerializationError::DataTooShort);
             }
 
-            if idx == 0 {
-                // First section is symbol table
-                let (size, table) = SymbolTable::deserialize(
-                    section_header,
-                    &data[section_data_offset..],
-                )?;
-                symbol_table = Some(table);
-                section_data_offset += size;
-            } else {
-                // Regular sections
-                let (size, section) = Section::deserialize(
-                    section_header,
-                    &data[section_data_offset..],
-                    header.architecture,
-                )?;
-                sections.push(section);
-                section_data_offset += size;
+            match (idx, section_header) {
+                (0, SectionHeader::SymbolTable(symbol_header)) => {
+                    // First section must be symbol table
+                    let (size, table) = SymbolTable::deserialize(
+                        symbol_header,
+                        &data[section_data_offset..],
+                    )?;
+                    symbol_table = Some(table);
+                    section_data_offset += size;
+                }
+                (_, SectionHeader::Text(_)) => {
+                    // Regular sections
+                    let (size, section) = Section::deserialize(
+                        section_header,
+                        &data[section_data_offset..],
+                        header.architecture,
+                    )?;
+                    sections.push(section);
+                    section_data_offset += size;
+                }
+                _ => return Err(SerializationError::InvalidData),
             }
         }
 
