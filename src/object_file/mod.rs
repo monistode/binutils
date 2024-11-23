@@ -32,9 +32,6 @@ impl Serializable for ObjectFile {
                 relocation_table.add_relocation(section_id, relocation);
             }
         }
-        
-        let (symbol_header, symbol_data) = symbol_table.serialize();
-        let (relocation_header, relocation_data) = relocation_table.serialize();
 
         // Serialize header with all sections (including symbol and relocation tables)
         let header = ObjectHeader {
@@ -47,18 +44,20 @@ impl Serializable for ObjectFile {
         let mut section_data = Vec::new();
         let mut headers = Vec::new();
 
-        // Add symbol and relocation table headers first
-        headers.push(symbol_header);
-        section_data.extend(symbol_data);
-        headers.push(relocation_header);
-        section_data.extend(relocation_data);
-
-        // Add regular section headers and data next
+        // Add regular section headers first
         for section in &self.sections {
             let (header, bytes) = section.serialize();
             headers.push(header);
             section_data.extend(bytes);
         }
+
+        // Add symbol and relocation table headers last
+        let (symbol_header, symbol_data) = symbol_table.serialize();
+        let (relocation_header, relocation_data) = relocation_table.serialize();
+        headers.push(symbol_header);
+        headers.push(relocation_header);
+        section_data.extend(symbol_data);
+        section_data.extend(relocation_data);
 
         // Add all headers followed by all section data
         for header in headers {
@@ -89,79 +88,73 @@ impl Serializable for ObjectFile {
             offset += size;
         }
 
-        // First two sections must be symbol table and relocation table
+        // Last two sections must be symbol table and relocation table
         let section_count = headers.len();
         if section_count < 2 {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[0], SectionHeader::SymbolTable(_)) {
+        if !matches!(headers[section_count-2], SectionHeader::SymbolTable(_)) {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[1], SectionHeader::RelocationTable(_)) {
+        if !matches!(headers[section_count-1], SectionHeader::RelocationTable(_)) {
             return Err(SerializationError::InvalidData);
         }
 
         // Ensure no other symbol/relocation table sections exist
-        if headers[2..].iter().any(|h| matches!(h, 
+        if headers[..section_count-2].iter().any(|h| matches!(h, 
             SectionHeader::SymbolTable(_) | SectionHeader::RelocationTable(_))) {
             return Err(SerializationError::InvalidData);
         }
 
-        // Read sections
-        let mut sections = Vec::new();
-        let mut symbol_table = None;
-        let mut relocation_table = None;
+        // Calculate offsets to symbol and relocation tables
         let mut section_data_offset = offset;
-        
-        // Process symbol and relocation tables first
-        for (idx, section_header) in headers.iter().enumerate().take(2) {
-            match (idx, section_header) {
-                (0, SectionHeader::SymbolTable(symbol_header)) => {
-                    let (size, table) = SymbolTable::deserialize(
-                        symbol_header,
-                        &data[section_data_offset..],
-                    )?;
-                    symbol_table = Some(table);
-                    section_data_offset += size;
-                }
-                (1, SectionHeader::RelocationTable(relocation_header)) => {
-                    let (size, table) = RelocationTable::deserialize(
-                        relocation_header,
-                        &data[section_data_offset..],
-                    )?;
-                    relocation_table = Some(table);
-                    section_data_offset += size;
-                }
-                _ => return Err(SerializationError::InvalidData),
-            }
+        for header in &headers[..section_count-2] {
+            section_data_offset += header.section_size();
         }
 
-        // Process remaining sections with the loaded tables
-        let symbol_table = symbol_table.ok_or(SerializationError::InvalidData)?;
-        let relocation_table = relocation_table.ok_or(SerializationError::InvalidData)?;
+        // Load symbol and relocation tables first
+        let symbol_offset = section_data_offset;
+        let (_, symbol_table) = SymbolTable::deserialize(
+            match &headers[section_count-2] {
+                SectionHeader::SymbolTable(h) => h,
+                _ => unreachable!(),
+            },
+            &data[symbol_offset..],
+        )?;
 
-        for (idx, section_header) in headers.iter().enumerate().skip(2) {
+        let relocation_offset = symbol_offset + headers[section_count-2].section_size();
+        let (_, relocation_table) = RelocationTable::deserialize(
+            match &headers[section_count-1] {
+                SectionHeader::RelocationTable(h) => h,
+                _ => unreachable!(),
+            },
+            &data[relocation_offset..],
+        )?;
+
+        // Process regular sections
+        let mut sections = Vec::new();
+        let mut current_offset = offset;
+
+        for (idx, section_header) in headers[..section_count-2].iter().enumerate() {
             match section_header {
                 SectionHeader::Text(_) => {
-                    let symbols = symbol_table.get_symbols(idx - 2);
-                    let relocations = relocation_table.get_relocations(idx - 2);
+                    let symbols = symbol_table.get_symbols(idx);
+                    let relocations = relocation_table.get_relocations(idx);
                     let (size, section) = Section::deserialize(
                         section_header,
-                        &data[section_data_offset..],
+                        &data[current_offset..],
                         header.architecture,
                         symbols,
                         relocations
                     )?;
                     sections.push(section);
-                    section_data_offset += size;
+                    current_offset += size;
                 }
                 _ => return Err(SerializationError::InvalidData),
             }
         }
 
-        Ok((section_data_offset, ObjectFile { 
-            header,
-            sections 
-        }))
+        Ok((relocation_offset + headers[section_count-1].section_size(), 
+            ObjectFile { header, sections }))
     }
 }

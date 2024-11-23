@@ -111,4 +111,18 @@ impl Serializable for SectionHeader {
             v => Err(SerializationError::InvalidSectionType(v)),
         }
     }
+}
+
+impl SectionHeader {
+    pub fn section_size(&self) -> usize {
+        match self {
+            SectionHeader::Text(header) => (header.bit_length as usize + 7) / 8,
+            SectionHeader::SymbolTable(header) => {
+                (header.entry_count as usize * 12) + header.names_length as usize
+            }
+            SectionHeader::RelocationTable(header) => {
+                (header.entry_count as usize * 16) + header.names_length as usize
+            }
+        }
+    }
 } 
