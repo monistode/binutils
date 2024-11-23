@@ -1,10 +1,12 @@
 use crate::object_file::serializable::{Architecture, Serializable, SerializationError};
 use crate::object_file::symbols::Symbol;
+use crate::object_file::relocations::Relocation;
 use super::header::{SectionHeader, TextSectionHeader};
+use super::text::TextSection;
 
 #[derive(Debug, Clone)]
 pub enum Section {
-    Text(super::text::TextSection),
+    Text(TextSection),
 }
 
 impl Section {
@@ -23,22 +25,34 @@ impl Section {
     pub fn deserialize(
         header: &SectionHeader,
         data: &[u8],
-        architecture: Architecture
+        architecture: Architecture,
+        symbols: Vec<Symbol>,
+        relocations: Vec<Relocation>
     ) -> Result<(usize, Self), SerializationError> {
         match header {
             SectionHeader::Text(header) => {
-                let (size, section) = super::text::TextSection::deserialize(header, data, architecture)?;
+                let (size, section) = TextSection::deserialize(
+                    header, 
+                    data, 
+                    architecture,
+                    symbols,
+                    relocations
+                )?;
                 Ok((size, Section::Text(section)))
             }
-            SectionHeader::SymbolTable(_) => {
-                Err(SerializationError::InvalidSectionType(0))
-            }
+            _ => Err(SerializationError::InvalidSectionType(0)),
         }
     }
 
     pub fn symbols(&self) -> Vec<Symbol> {
         match self {
             Section::Text(text) => text.symbols.clone(),
+        }
+    }
+
+    pub fn relocations(&self) -> Vec<Relocation> {
+        match self {
+            Section::Text(text) => text.relocations.clone(),
         }
     }
 }

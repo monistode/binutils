@@ -4,6 +4,7 @@ use crate::object_file::serializable::{Serializable, SerializationError};
 pub enum SectionType {
     Text,
     SymbolTable,
+    RelocationTable,
 }
 
 impl TryFrom<u8> for SectionType {
@@ -13,6 +14,7 @@ impl TryFrom<u8> for SectionType {
         match value {
             0 => Ok(SectionType::Text),
             255 => Ok(SectionType::SymbolTable),
+            254 => Ok(SectionType::RelocationTable),
             v => Err(SerializationError::InvalidSectionType(v)),
         }
     }
@@ -23,6 +25,7 @@ impl From<SectionType> for u8 {
         match value {
             SectionType::Text => 0,
             SectionType::SymbolTable => 255,
+            SectionType::RelocationTable => 254,
         }
     }
 }
@@ -39,9 +42,16 @@ pub struct SymbolTableHeader {
 }
 
 #[derive(Debug, Clone)]
+pub struct RelocationTableHeader {
+    pub entry_count: u32,
+    pub names_length: u32,
+}
+
+#[derive(Debug, Clone)]
 pub enum SectionHeader {
     Text(TextSectionHeader),
     SymbolTable(SymbolTableHeader),
+    RelocationTable(RelocationTableHeader),
 }
 
 impl Serializable for SectionHeader {
@@ -59,6 +69,12 @@ impl Serializable for SectionHeader {
                 data.extend(header.entry_count.to_le_bytes());
                 data.extend(header.names_length.to_le_bytes());
             }
+            SectionHeader::RelocationTable(header) => {
+                data.push(SectionType::RelocationTable.into());
+                data.extend([0; 3]); // Padding to 4 bytes
+                data.extend(header.entry_count.to_le_bytes());
+                data.extend(header.names_length.to_le_bytes());
+            }
         }
         data
     }
@@ -68,27 +84,39 @@ impl Serializable for SectionHeader {
             return Err(SerializationError::DataTooShort);
         }
 
-        let section_type = SectionType::try_from(data[0])?;
-        match section_type {
-            SectionType::Text => {
+        match data[0] {
+            0 => {
                 let bit_length = u64::from_le_bytes([
                     data[8], data[9], data[10], data[11],
                     data[12], data[13], data[14], data[15],
                 ]);
                 Ok((16, SectionHeader::Text(TextSectionHeader { bit_length })))
             }
-            SectionType::SymbolTable => {
+            255 => {
                 let entry_count = u32::from_le_bytes([
                     data[4], data[5], data[6], data[7],
                 ]);
                 let names_length = u32::from_le_bytes([
                     data[8], data[9], data[10], data[11],
                 ]);
-                Ok((16, SectionHeader::SymbolTable(SymbolTableHeader { 
+                Ok((12, SectionHeader::SymbolTable(SymbolTableHeader { 
                     entry_count, 
                     names_length 
                 })))
             }
+            254 => {
+                let entry_count = u32::from_le_bytes([
+                    data[4], data[5], data[6], data[7],
+                ]);
+                let names_length = u32::from_le_bytes([
+                    data[8], data[9], data[10], data[11],
+                ]);
+                Ok((12, SectionHeader::RelocationTable(RelocationTableHeader { 
+                    entry_count, 
+                    names_length 
+                })))
+            }
+            v => Err(SerializationError::InvalidSectionType(v)),
         }
     }
 } 

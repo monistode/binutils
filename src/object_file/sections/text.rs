@@ -1,17 +1,19 @@
 use bitvec::prelude::*;
 use crate::object_file::serializable::{Architecture, Serializable, SerializationError};
 use crate::object_file::symbols::Symbol;
+use crate::object_file::relocations::Relocation;
 use super::header::TextSectionHeader;
 
 #[derive(Debug, Clone)]
 pub struct TextSection {
     pub data: BitVec,
     pub symbols: Vec<Symbol>,
+    pub relocations: Vec<Relocation>,
 }
 
 impl TextSection {
-    pub fn new(data: BitVec, symbols: Vec<Symbol>) -> Self {
-        TextSection { data, symbols }
+    pub fn new(data: BitVec, symbols: Vec<Symbol>, relocations: Vec<Relocation>) -> Self {
+        TextSection { data, symbols, relocations }
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -31,7 +33,9 @@ impl TextSection {
     pub fn deserialize(
         header: &TextSectionHeader,
         data: &[u8],
-        architecture: Architecture
+        architecture: Architecture,
+        symbols: Vec<Symbol>,
+        relocations: Vec<Relocation>
     ) -> Result<(usize, Self), SerializationError> {
         let required_bytes = (header.bit_length as usize + 7) / 8;
         if data.len() < required_bytes {
@@ -46,7 +50,11 @@ impl TextSection {
                     bits.push(bit);
                 }
                 let bytes_read = (header.bit_length + 7) as usize / 8;
-                Ok((bytes_read, TextSection { data: bits, symbols: Vec::new() }))
+                Ok((bytes_read, TextSection { 
+                    data: bits, 
+                    symbols,
+                    relocations,
+                }))
             }
         }
     }
