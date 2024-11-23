@@ -3,7 +3,7 @@ mod header;
 pub mod sections;
 pub mod symbols;
 
-pub use serializable::{Architecture, Serializable};
+pub use serializable::{Architecture, Serializable, SerializationError};
 pub use header::ObjectHeader;
 pub use sections::*;
 pub use symbols::{Address, Symbol, SymbolTable, SymbolTableHeader};
@@ -58,22 +58,38 @@ impl Serializable for ObjectFile {
         data
     }
 
-    fn deserialize(data: &[u8]) -> (usize, Self) {
-        let (header_size, header) = ObjectHeader::deserialize(data);
+    fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError> {
+        if data.len() < 9 {
+            return Err(SerializationError::DataTooShort);
+        }
+
+        // Parse header
+        let (header_size, header) = ObjectHeader::deserialize(data)?;
         let mut offset = header_size;
 
+        if data.len() < offset + 9 {
+            return Err(SerializationError::DataTooShort);
+        }
+
         // Parse symbol table header
-        let (symbol_header_size, symbol_header) = SymbolTableHeader::deserialize(&data[offset..]);
+        let (symbol_header_size, symbol_header) = SymbolTableHeader::deserialize(&data[offset..])?;
         offset += symbol_header_size;
 
+        if data.len() < offset {
+            return Err(SerializationError::DataTooShort);
+        }
+
         // Parse symbol table data
-        let (symbol_table_size, symbol_table) = SymbolTable::deserialize(&symbol_header, &data[offset..]);
+        let (symbol_table_size, symbol_table) = SymbolTable::deserialize(&symbol_header, &data[offset..])?;
         offset += symbol_table_size;
 
         // Read section headers
         let mut headers = Vec::new();
         for _ in 0..header.section_count {
-            let (size, section_header) = SectionHeader::deserialize(&data[offset..]);
+            if data.len() < offset + 16 { // Minimum section header size
+                return Err(SerializationError::DataTooShort);
+            }
+            let (size, section_header) = SectionHeader::deserialize(&data[offset..])?;
             headers.push(section_header);
             offset += size;
         }
@@ -83,19 +99,22 @@ impl Serializable for ObjectFile {
         let mut section_data_offset = offset;
         
         for section_header in &headers {
+            if data.len() < section_data_offset {
+                return Err(SerializationError::DataTooShort);
+            }
             let (size, section) = Section::deserialize(
                 section_header,
                 &data[section_data_offset..],
                 header.architecture,
-            );
+            )?;
             sections.push(section);
             section_data_offset += size;
         }
 
-        (section_data_offset, ObjectFile { 
+        Ok((section_data_offset, ObjectFile { 
             header, 
             symbol_table: Some(symbol_table), 
             sections 
-        })
+        }))
     }
 }

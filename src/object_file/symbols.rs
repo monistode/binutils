@@ -38,13 +38,19 @@ impl Serializable for SymbolTableHeader {
         data
     }
 
-    fn deserialize(data: &[u8]) -> (usize, Self) {
-        if data[0] != 255 {
-            panic!("Invalid symbol table header");
+    fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError> {
+        if data.len() < 9 {
+            return Err(SerializationError::DataTooShort);
         }
+
+        if data[0] != 255 {
+            return Err(SerializationError::InvalidSymbolTableHeader);
+        }
+
         let entry_count = u32::from_le_bytes([data[1], data[2], data[3], data[4]]);
         let names_length = u32::from_le_bytes([data[5], data[6], data[7], data[8]]);
-        (9, SymbolTableHeader { entry_count, names_length })
+        
+        Ok((9, SymbolTableHeader { entry_count, names_length }))
     }
 }
 
@@ -95,12 +101,21 @@ impl SymbolTable {
         (header, data)
     }
 
-    pub fn deserialize(header: &SymbolTableHeader, data: &[u8]) -> (usize, Self) {
+    pub fn deserialize(header: &SymbolTableHeader, data: &[u8]) -> Result<(usize, Self), SerializationError> {
+        let required_size = (header.entry_count as usize * 12) + header.names_length as usize;
+        if data.len() < required_size {
+            return Err(SerializationError::DataTooShort);
+        }
+
         let mut offset = 0;
         let mut entries = Vec::new();
 
         // Read entries
         for _ in 0..header.entry_count {
+            if offset + 12 > data.len() {
+                return Err(SerializationError::DataTooShort);
+            }
+
             let section_id = u32::from_le_bytes([
                 data[offset], data[offset + 1],
                 data[offset + 2], data[offset + 3],
@@ -119,6 +134,10 @@ impl SymbolTable {
             ]) as usize;
             offset += 4;
 
+            if name_offset >= header.names_length as usize {
+                return Err(SerializationError::InvalidData);
+            }
+
             entries.push(SymbolEntry {
                 section_id,
                 offset: Address(addr),
@@ -127,9 +146,17 @@ impl SymbolTable {
         }
 
         // Read names
+        if offset + header.names_length as usize > data.len() {
+            return Err(SerializationError::DataTooShort);
+        }
         let names = data[offset..offset + header.names_length as usize].to_vec();
         
-        (offset + header.names_length as usize, SymbolTable { entries, names })
+        // Validate that all names are properly null-terminated
+        if !names.iter().any(|&b| b == 0) {
+            return Err(SerializationError::InvalidData);
+        }
+
+        Ok((offset + header.names_length as usize, SymbolTable { entries, names }))
     }
 
     pub fn get_symbols(&self) -> Vec<Symbol> {

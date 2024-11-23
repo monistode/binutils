@@ -1,5 +1,5 @@
 use bitvec::prelude::*;
-use crate::object_file::serializable::{Architecture, Serializable};
+use crate::object_file::serializable::{Architecture, Serializable, SerializationError};
 use crate::object_file::symbols::Symbol;
 
 #[derive(Debug, Clone)]
@@ -37,9 +37,18 @@ impl TextSection {
         bytes
     }
 
-    pub fn deserialize(header: &SectionHeader, data: &[u8], architecture: Architecture) -> (usize, Self) {
+    pub fn deserialize(
+        header: &SectionHeader,
+        data: &[u8],
+        architecture: Architecture
+    ) -> Result<(usize, Self), SerializationError> {
         match header {
             SectionHeader::Text(header) => {
+                let required_bytes = (header.bit_length as usize + 7) / 8;
+                if data.len() < required_bytes {
+                    return Err(SerializationError::DataTooShort);
+                }
+
                 match architecture {
                     Architecture::Stack => {
                         let mut bits = BitVec::new();
@@ -48,15 +57,7 @@ impl TextSection {
                             bits.push(bit);
                         }
                         let bytes_read = (header.bit_length + 7) as usize / 8;
-                        (bytes_read, TextSection { data: bits, symbols: Vec::new() })
-                    },
-                    _ => {
-                        let mut bits = BitVec::new();
-                        for i in 0..header.bit_length as usize * 8 {
-                            let bit = data[i / 8] & (1 << (i % 8)) != 0;
-                            bits.push(bit);
-                        }
-                        (header.bit_length as usize, TextSection { data: bits, symbols: Vec::new() })
+                        Ok((bytes_read, TextSection { data: bits, symbols: Vec::new() }))
                     }
                 }
             }
@@ -77,16 +78,20 @@ impl Serializable for SectionHeader {
         data
     }
 
-    fn deserialize(data: &[u8]) -> (usize, Self) {
+    fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError> {
+        if data.len() < 16 {
+            return Err(SerializationError::DataTooShort);
+        }
+
         match data[0] {
             0 => {
                 let bit_length = u64::from_le_bytes([
                     data[8], data[9], data[10], data[11],
                     data[12], data[13], data[14], data[15],
                 ]);
-                (16, SectionHeader::Text(TextSectionHeader { bit_length }))
+                Ok((16, SectionHeader::Text(TextSectionHeader { bit_length })))
             }
-            _ => panic!("Invalid section type"),
+            v => Err(SerializationError::InvalidSectionType(v)),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::object_file::serializable::{Architecture, Serializable};
+use crate::object_file::serializable::{Architecture, Serializable, SerializationError};
 use crate::object_file::symbols::Symbol;
 
 #[derive(Debug, Clone)]
@@ -19,11 +19,15 @@ impl Section {
         }
     }
 
-    pub fn deserialize(header: &super::text::SectionHeader, data: &[u8], architecture: Architecture) -> (usize, Self) {
+    pub fn deserialize(
+        header: &super::text::SectionHeader,
+        data: &[u8],
+        architecture: Architecture
+    ) -> Result<(usize, Self), SerializationError> {
         match header {
             super::text::SectionHeader::Text { .. } => {
-                let (size, section) = super::text::TextSection::deserialize(header, data, architecture);
-                (size, Section::Text(section))
+                let (size, section) = super::text::TextSection::deserialize(header, data, architecture)?;
+                Ok((size, Section::Text(section)))
             }
         }
     }
