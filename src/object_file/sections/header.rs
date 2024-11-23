@@ -68,12 +68,14 @@ impl Serializable for SectionHeader {
                 data.extend([0; 3]); // Padding to 4 bytes
                 data.extend(header.entry_count.to_le_bytes());
                 data.extend(header.names_length.to_le_bytes());
+                data.extend([0; 4]); // Padding to 16 bytes
             }
             SectionHeader::RelocationTable(header) => {
                 data.push(SectionType::RelocationTable.into());
                 data.extend([0; 3]); // Padding to 4 bytes
                 data.extend(header.entry_count.to_le_bytes());
                 data.extend(header.names_length.to_le_bytes());
+                data.extend([0; 4]); // Padding to 16 bytes
             }
         }
         data
@@ -92,29 +94,19 @@ impl Serializable for SectionHeader {
                 ]);
                 Ok((16, SectionHeader::Text(TextSectionHeader { bit_length })))
             }
-            255 => {
+            255 | 254 => {
                 let entry_count = u32::from_le_bytes([
                     data[4], data[5], data[6], data[7],
                 ]);
                 let names_length = u32::from_le_bytes([
                     data[8], data[9], data[10], data[11],
                 ]);
-                Ok((12, SectionHeader::SymbolTable(SymbolTableHeader { 
-                    entry_count, 
-                    names_length 
-                })))
-            }
-            254 => {
-                let entry_count = u32::from_le_bytes([
-                    data[4], data[5], data[6], data[7],
-                ]);
-                let names_length = u32::from_le_bytes([
-                    data[8], data[9], data[10], data[11],
-                ]);
-                Ok((12, SectionHeader::RelocationTable(RelocationTableHeader { 
-                    entry_count, 
-                    names_length 
-                })))
+                let header = if data[0] == 255 {
+                    SectionHeader::SymbolTable(SymbolTableHeader { entry_count, names_length })
+                } else {
+                    SectionHeader::RelocationTable(RelocationTableHeader { entry_count, names_length })
+                };
+                Ok((16, header))
             }
             v => Err(SerializationError::InvalidSectionType(v)),
         }
