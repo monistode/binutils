@@ -158,3 +158,32 @@ impl Serializable for ObjectFile {
             ObjectFile { header, sections }))
     }
 }
+
+impl ObjectFile {
+    pub fn new(architecture: Architecture) -> Self {
+        ObjectFile {
+            header: ObjectHeader::new(architecture, 0),
+            sections: Vec::new(),
+        }
+    }
+
+    pub fn with_sections(architecture: Architecture, sections: Vec<Section>) -> Self {
+        ObjectFile {
+            header: ObjectHeader::new(architecture, sections.len() as u64),
+            sections,
+        }
+    }
+
+    pub fn add_section(&mut self, section: Section) {
+        self.sections.push(section);
+        self.header.section_count = self.sections.len() as u64;
+    }
+
+    pub fn sections(&self) -> &[Section] {
+        &self.sections
+    }
+
+    pub fn sections_mut(&mut self) -> &mut Vec<Section> {
+        &mut self.sections
+    }
+}

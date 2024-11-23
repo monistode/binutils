@@ -28,3 +28,12 @@ impl Serializable for ObjectHeader {
         Ok((9, ObjectHeader { architecture, section_count }))
     }
 }
+
+impl ObjectHeader {
+    pub fn new(architecture: Architecture, section_count: u64) -> Self {
+        ObjectHeader {
+            architecture,
+            section_count,
+        }
+    }
+}
