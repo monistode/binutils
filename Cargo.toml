@@ -2,6 +2,8 @@
 name = "monistode-binutils"
 version = "0.1.0"
 edition = "2021"
+description = "A cleaner rust backend implementation of the monistode binutils"
+license = "MIT"
 
 [dependencies]
 bitvec = "1.0.1"

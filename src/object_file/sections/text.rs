@@ -1,6 +1,6 @@
 use super::header::TextSectionHeader;
 use crate::object_file::relocations::Relocation;
-use crate::serializable::{Architecture, SerializationError};
+use crate::serializable::SerializationError;
 use crate::symbols::Symbol;
 use bitvec::prelude::*;
 
