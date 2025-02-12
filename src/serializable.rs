@@ -2,6 +2,7 @@
 pub enum SerializationError {
     InvalidArchitecture(u8),
     InvalidSectionType(u8),
+    InvalidSegmentType(u8),
     InvalidSymbolTableHeader,
     InvalidData,
     DataTooShort,

@@ -1,6 +1,6 @@
-use super::serializable::*;
-use super::sections::header::{SectionHeader, RelocationTableHeader};
-use super::symbols::Address;
+use super::sections::header::{RelocationTableHeader, SectionHeader};
+use crate::serializable::*;
+use crate::Address;
 
 #[derive(Debug, Clone)]
 pub struct Relocation {
@@ -46,7 +46,7 @@ impl RelocationTable {
 
     pub fn serialize(&self) -> (SectionHeader, Vec<u8>) {
         let mut data = Vec::new();
-        
+
         // Entries
         for entry in &self.entries {
             data.extend((entry.section_id as u32).to_le_bytes());
@@ -69,7 +69,10 @@ impl RelocationTable {
         (header, data)
     }
 
-    pub fn deserialize(header: &RelocationTableHeader, data: &[u8]) -> Result<(usize, Self), SerializationError> {
+    pub fn deserialize(
+        header: &RelocationTableHeader,
+        data: &[u8],
+    ) -> Result<(usize, Self), SerializationError> {
         let required_size = (header.entry_count as usize * 16) + header.names_length as usize;
         if data.len() < required_size {
             return Err(SerializationError::DataTooShort);
@@ -85,20 +88,26 @@ impl RelocationTable {
             }
 
             let section_id = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
             ]) as usize;
             offset += 4;
 
             let symbol_offset = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
             ]) as usize;
             offset += 4;
 
             let addr = u32::from_le_bytes([
-                data[offset], data[offset + 1],
-                data[offset + 2], data[offset + 3],
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
             ]) as usize;
             offset += 4;
 
@@ -122,17 +131,21 @@ impl RelocationTable {
             return Err(SerializationError::DataTooShort);
         }
         let names = data[offset..offset + header.names_length as usize].to_vec();
-        
+
         // Validate that all names are properly null-terminated
         if !names.iter().any(|&b| b == 0) {
             return Err(SerializationError::InvalidData);
         }
 
-        Ok((offset + header.names_length as usize, RelocationTable { entries, names }))
+        Ok((
+            offset + header.names_length as usize,
+            RelocationTable { entries, names },
+        ))
     }
 
     pub fn get_relocations(&self, section_id: usize) -> Vec<Relocation> {
-        self.entries.iter()
+        self.entries
+            .iter()
             .filter(|entry| entry.section_id == section_id)
             .map(|entry| {
                 let mut symbol = String::new();
@@ -146,6 +159,7 @@ impl RelocationTable {
                     address: Address(entry.address.0),
                     relative: entry.relative,
                 }
-            }).collect()
+            })
+            .collect()
     }
 }

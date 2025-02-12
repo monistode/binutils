@@ -1,16 +1,16 @@
 use crate::serializable::*;
 
 #[derive(Debug, Clone)]
-pub struct ObjectHeader {
+pub struct ExecutableHeader {
     pub(crate) architecture: Architecture,
-    pub(crate) section_count: u64,
+    pub(crate) segment_count: u64,
 }
 
-impl Serializable for ObjectHeader {
+impl Serializable for ExecutableHeader {
     fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
         data.push(self.architecture as u8);
-        data.extend(self.section_count.to_le_bytes());
+        data.extend(self.segment_count.to_le_bytes());
         data
     }
 
@@ -20,26 +20,25 @@ impl Serializable for ObjectHeader {
         }
 
         let architecture = Architecture::try_from(data[0])?;
-        let section_count = u64::from_le_bytes([
+        let segment_count = u64::from_le_bytes([
             data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
         ]);
 
         Ok((
             9,
-            ObjectHeader {
+            ExecutableHeader {
                 architecture,
-                section_count,
+                segment_count,
             },
         ))
     }
 }
 
-impl ObjectHeader {
-    pub fn new(architecture: Architecture, section_count: u64) -> Self {
-        ObjectHeader {
+impl ExecutableHeader {
+    pub fn new(architecture: Architecture, segment_count: u64) -> Self {
+        ExecutableHeader {
             architecture,
-            section_count,
+            segment_count,
         }
     }
 }
-

@@ -1,14 +1,13 @@
-mod serializable;
-mod header;
-pub mod sections;
-pub mod symbols;
+pub mod header;
+pub mod placed;
 pub mod relocations;
+pub mod sections;
 
-pub use serializable::{Architecture, Serializable, SerializationError};
 pub use header::ObjectHeader;
+pub use relocations::{Relocation, RelocationTable};
 pub use sections::*;
-pub use symbols::{SymbolTable, Symbol, Address};
-pub use relocations::{RelocationTable, Relocation};
+
+use crate::{Architecture, Serializable, SerializationError, SymbolTable};
 
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
@@ -19,11 +18,11 @@ pub struct ObjectFile {
 impl Serializable for ObjectFile {
     fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        
+
         // Create symbol and relocation tables from section data
         let mut symbol_table = SymbolTable::new();
         let mut relocation_table = RelocationTable::new();
-        
+
         for (section_id, section) in self.sections.iter().enumerate() {
             for symbol in section.symbols() {
                 symbol_table.add_symbol(section_id, symbol);
@@ -52,7 +51,7 @@ impl Serializable for ObjectFile {
         }
 
         // Add symbol and relocation table headers last
-        let (symbol_header, symbol_data) = symbol_table.serialize();
+        let (symbol_header, symbol_data) = symbol_table.serialize_as_section();
         let (relocation_header, relocation_data) = relocation_table.serialize();
         headers.push(symbol_header);
         headers.push(relocation_header);
@@ -64,7 +63,7 @@ impl Serializable for ObjectFile {
             data.extend(header.serialize());
         }
         data.extend(section_data);
-        
+
         data
     }
 
@@ -80,7 +79,8 @@ impl Serializable for ObjectFile {
         // Read all section headers
         let mut headers = Vec::new();
         for _ in 0..header.section_count {
-            if data.len() < offset + 16 { // Minimum section header size
+            if data.len() < offset + 16 {
+                // Minimum section header size
                 return Err(SerializationError::DataTooShort);
             }
             let (size, section_header) = SectionHeader::deserialize(&data[offset..])?;
@@ -93,38 +93,45 @@ impl Serializable for ObjectFile {
         if section_count < 2 {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[section_count-2], SectionHeader::SymbolTable(_)) {
+        if !matches!(headers[section_count - 2], SectionHeader::SymbolTable(_)) {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[section_count-1], SectionHeader::RelocationTable(_)) {
+        if !matches!(
+            headers[section_count - 1],
+            SectionHeader::RelocationTable(_)
+        ) {
             return Err(SerializationError::InvalidData);
         }
 
         // Ensure no other symbol/relocation table sections exist
-        if headers[..section_count-2].iter().any(|h| matches!(h, 
-            SectionHeader::SymbolTable(_) | SectionHeader::RelocationTable(_))) {
+        if headers[..section_count - 2].iter().any(|h| {
+            matches!(
+                h,
+                SectionHeader::SymbolTable(_) | SectionHeader::RelocationTable(_)
+            )
+        }) {
             return Err(SerializationError::InvalidData);
         }
 
         // Calculate offsets to symbol and relocation tables
         let mut section_data_offset = offset;
-        for header in &headers[..section_count-2] {
+        for header in &headers[..section_count - 2] {
             section_data_offset += header.section_size();
         }
 
         // Load symbol and relocation tables first
         let symbol_offset = section_data_offset;
-        let (_, symbol_table) = SymbolTable::deserialize(
-            match &headers[section_count-2] {
+        let (_, symbol_table) = SymbolTable::deserialize_section(
+            match &headers[section_count - 2] {
                 SectionHeader::SymbolTable(h) => h,
                 _ => unreachable!(),
             },
             &data[symbol_offset..],
         )?;
 
-        let relocation_offset = symbol_offset + headers[section_count-2].section_size();
+        let relocation_offset = symbol_offset + headers[section_count - 2].section_size();
         let (_, relocation_table) = RelocationTable::deserialize(
-            match &headers[section_count-1] {
+            match &headers[section_count - 1] {
                 SectionHeader::RelocationTable(h) => h,
                 _ => unreachable!(),
             },
@@ -135,7 +142,7 @@ impl Serializable for ObjectFile {
         let mut sections = Vec::new();
         let mut current_offset = offset;
 
-        for (idx, section_header) in headers[..section_count-2].iter().enumerate() {
+        for (idx, section_header) in headers[..section_count - 2].iter().enumerate() {
             match section_header {
                 SectionHeader::Text(_) => {
                     let symbols = symbol_table.get_symbols(idx);
@@ -145,7 +152,7 @@ impl Serializable for ObjectFile {
                         &data[current_offset..],
                         header.architecture,
                         symbols,
-                        relocations
+                        relocations,
                     )?;
                     sections.push(section);
                     current_offset += size;
@@ -154,8 +161,10 @@ impl Serializable for ObjectFile {
             }
         }
 
-        Ok((relocation_offset + headers[section_count-1].section_size(), 
-            ObjectFile { header, sections }))
+        Ok((
+            relocation_offset + headers[section_count - 1].section_size(),
+            ObjectFile { header, sections },
+        ))
     }
 }
 
@@ -179,11 +188,11 @@ impl ObjectFile {
         self.header.section_count = self.sections.len() as u64;
     }
 
-    pub fn sections(&self) -> &[Section] {
-        &self.sections
+    pub fn sections(self) -> Vec<Section> {
+        self.sections
     }
 
-    pub fn sections_mut(&mut self) -> &mut Vec<Section> {
-        &mut self.sections
+    pub fn architecture(&self) -> Architecture {
+        self.header.architecture
     }
 }

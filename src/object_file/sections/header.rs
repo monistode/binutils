@@ -1,4 +1,4 @@
-use crate::object_file::serializable::{Serializable, SerializationError};
+use crate::serializable::{Serializable, SerializationError};
 
 #[derive(Debug, Clone)]
 pub enum SectionType {
@@ -89,22 +89,23 @@ impl Serializable for SectionHeader {
         match data[0] {
             0 => {
                 let bit_length = u64::from_le_bytes([
-                    data[8], data[9], data[10], data[11],
-                    data[12], data[13], data[14], data[15],
+                    data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
                 ]);
                 Ok((16, SectionHeader::Text(TextSectionHeader { bit_length })))
             }
             255 | 254 => {
-                let entry_count = u32::from_le_bytes([
-                    data[4], data[5], data[6], data[7],
-                ]);
-                let names_length = u32::from_le_bytes([
-                    data[8], data[9], data[10], data[11],
-                ]);
+                let entry_count = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+                let names_length = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
                 let header = if data[0] == 255 {
-                    SectionHeader::SymbolTable(SymbolTableHeader { entry_count, names_length })
+                    SectionHeader::SymbolTable(SymbolTableHeader {
+                        entry_count,
+                        names_length,
+                    })
                 } else {
-                    SectionHeader::RelocationTable(RelocationTableHeader { entry_count, names_length })
+                    SectionHeader::RelocationTable(RelocationTableHeader {
+                        entry_count,
+                        names_length,
+                    })
                 };
                 Ok((16, header))
             }
@@ -125,4 +126,5 @@ impl SectionHeader {
             }
         }
     }
-} 
+}
+
