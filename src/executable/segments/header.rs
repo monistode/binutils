@@ -1,115 +1,53 @@
 use crate::{Serializable, SerializationError};
 
-#[derive(Debug, Clone)]
-pub enum SegmentType {
-    Text,
-    SymbolTable,
-}
-
-impl TryFrom<u8> for SegmentType {
-    type Error = SerializationError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(SegmentType::Text),
-            255 => Ok(SegmentType::SymbolTable),
-            v => Err(SerializationError::InvalidSegmentType(v)),
-        }
-    }
-}
-
-impl From<SegmentType> for u8 {
-    fn from(value: SegmentType) -> Self {
-        match value {
-            SegmentType::Text => 0,
-            SegmentType::SymbolTable => 255,
-        }
-    }
-}
+use super::flags::SegmentFlags;
 
 #[derive(Debug, Clone)]
-pub struct TextSegmentHeader {
-    pub location: usize,
-    pub bit_length: u64,
-}
-
-#[derive(Debug, Clone)]
-pub struct SymbolTableHeader {
-    pub entry_count: u32,
-    pub names_length: u32,
-}
-
-#[derive(Debug, Clone)]
-pub enum SegmentHeader {
-    Text(TextSegmentHeader),
-    SymbolTable(SymbolTableHeader),
+pub struct SegmentHeader {
+    pub address_space_start: u64, // These are the addresses - in bytes
+    pub address_space_size: u64,
+    pub disk_bit_count: usize,
+    pub flags: SegmentFlags,
 }
 
 impl Serializable for SegmentHeader {
     fn serialize(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(16);
-        match self {
-            SegmentHeader::Text(header) => {
-                data.push(SegmentType::Text.into()); // len=1
-                data.extend(vec![0u8; 7]); // len=8
-                data.extend(header.location.to_le_bytes()); // len=16
-                data.extend(header.bit_length.to_le_bytes()); // len=24
-            }
-            SegmentHeader::SymbolTable(header) => {
-                data.push(SegmentType::SymbolTable.into());
-                data.extend([0; 3]); // Padding to 4 bytes
-                data.extend(header.entry_count.to_le_bytes());
-                data.extend(header.names_length.to_le_bytes());
-                data.extend([0; 4]); // Padding to 16 bytes
-            }
-        }
+        let mut data = Vec::new();
+        data.extend(self.address_space_start.to_le_bytes());
+        data.extend(self.address_space_size.to_le_bytes());
+        data.extend(self.disk_bit_count.to_le_bytes());
+        data.extend(self.flags.serialize());
         data
     }
 
     fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError> {
-        if data.len() < 16 {
+        if data.len() < 24 {
             return Err(SerializationError::DataTooShort);
         }
-
-        match data[0] {
-            0 => {
-                let location = usize::from_le_bytes([
-                    data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-                ]);
-                let bit_length = u64::from_le_bytes([
-                    data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
-                ]);
-                Ok((
-                    24,
-                    SegmentHeader::Text(TextSegmentHeader {
-                        location,
-                        bit_length,
-                    }),
-                ))
-            }
-            255 => {
-                let entry_count = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-                let names_length = u32::from_le_bytes([data[8], data[9], data[10], data[11]]);
-                Ok((
-                    16,
-                    SegmentHeader::SymbolTable(SymbolTableHeader {
-                        entry_count,
-                        names_length,
-                    }),
-                ))
-            }
-            v => Err(SerializationError::InvalidSegmentType(v)),
-        }
+        let address_space_start = u64::from_le_bytes([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ]);
+        let address_space_size = u64::from_le_bytes([
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+        ]);
+        let disk_bit_count = u64::from_le_bytes([
+            data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23],
+        ]) as usize;
+        let (flags_size, flags) = SegmentFlags::deserialize(&data[24..])?;
+        return Ok((
+            24 + flags_size,
+            SegmentHeader {
+                address_space_start,
+                address_space_size,
+                disk_bit_count,
+                flags,
+            },
+        ));
     }
 }
 
 impl SegmentHeader {
     pub fn segment_size(&self) -> usize {
-        match self {
-            SegmentHeader::Text(header) => (header.bit_length as usize + 7) / 8,
-            SegmentHeader::SymbolTable(header) => {
-                (header.entry_count as usize * 12) + header.names_length as usize
-            }
-        }
+        (self.disk_bit_count + 7) / 8
     }
 }

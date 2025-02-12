@@ -1,5 +1,6 @@
-use crate::executable::segments::{SegmentHeader, SymbolTableHeader as SymbolTableSegmentHeader};
-use crate::object_file::{SectionHeader, SymbolTableHeader as SymbolTableSectionHeader};
+use crate::executable::segments::flags::SegmentFlags;
+use crate::executable::segments::SegmentHeader;
+use crate::object_file::{SectionHeader, SymbolTableHeader};
 
 use super::address::Address;
 use super::serializable::*;
@@ -12,9 +13,9 @@ pub struct Symbol {
 
 #[derive(Debug, Clone)]
 struct SymbolEntry {
-    section_id: usize,
+    section_id: u32,
     offset: Address,
-    name_offset: usize,
+    name_offset: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -31,8 +32,8 @@ impl SymbolTable {
         }
     }
 
-    pub fn add_symbol(&mut self, section_id: usize, symbol: Symbol) {
-        let name_offset = self.names.len();
+    pub fn add_symbol(&mut self, section_id: u32, symbol: Symbol) {
+        let name_offset = self.names.len() as u32;
         self.names.extend(symbol.name.as_bytes());
         self.names.push(0); // null terminator
 
@@ -48,15 +49,15 @@ impl SymbolTable {
 
         // Entries
         for entry in &self.entries {
-            data.extend((entry.section_id as u32).to_le_bytes());
+            data.extend(entry.section_id.to_le_bytes());
             data.extend((entry.offset.0 as u32).to_le_bytes());
-            data.extend((entry.name_offset as u32).to_le_bytes());
+            data.extend(entry.name_offset.to_le_bytes());
         }
 
         // Names
         data.extend(&self.names);
 
-        let header = SectionHeader::SymbolTable(SymbolTableSectionHeader {
+        let header = SectionHeader::SymbolTable(SymbolTableHeader {
             entry_count: self.entries.len() as u32,
             names_length: self.names.len() as u32,
         });
@@ -69,24 +70,34 @@ impl SymbolTable {
 
         // Entries
         for entry in &self.entries {
-            data.extend((entry.section_id as u32).to_le_bytes());
+            data.extend(entry.section_id.to_le_bytes());
             data.extend((entry.offset.0 as u32).to_le_bytes());
-            data.extend((entry.name_offset as u32).to_le_bytes());
+            data.extend(entry.name_offset.to_le_bytes());
         }
 
         // Names
         data.extend(&self.names);
 
-        let header = SegmentHeader::SymbolTable(SymbolTableSegmentHeader {
-            entry_count: self.entries.len() as u32,
-            names_length: self.names.len() as u32,
-        });
+        let header = SegmentHeader {
+            // TODO do what rust does best
+            address_space_start: 0, // Special -> special section type
+            address_space_size: self.entries.len() as u64, // Since it's special, we can use this field
+            // for whatever
+            // Special -> disk_bit_count doesn't have to follow the rules either
+            disk_bit_count: data.len(),
+            flags: SegmentFlags {
+                executable: false,
+                writable: false,
+                readable: false,
+                special: true,
+            },
+        };
 
         (header, data)
     }
 
     pub fn deserialize_section(
-        header: &SymbolTableSectionHeader,
+        header: &SymbolTableHeader,
         data: &[u8],
     ) -> Result<(usize, Self), SerializationError> {
         let required_size = (header.entry_count as usize * 12) + header.names_length as usize;
@@ -108,7 +119,7 @@ impl SymbolTable {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-            ]) as usize;
+            ]);
             offset += 4;
 
             let addr = u32::from_le_bytes([
@@ -124,10 +135,10 @@ impl SymbolTable {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-            ]) as usize;
+            ]);
             offset += 4;
 
-            if name_offset >= header.names_length as usize {
+            if name_offset >= header.names_length {
                 return Err(SerializationError::InvalidData);
             }
 
@@ -145,8 +156,10 @@ impl SymbolTable {
         let names = data[offset..offset + header.names_length as usize].to_vec();
 
         // Validate that all names are properly null-terminated
-        if !names.iter().any(|&b| b == 0) {
-            return Err(SerializationError::InvalidData);
+        if names.len() > 0 {
+            if !names.iter().any(|&b| b == 0) {
+                return Err(SerializationError::InvalidData);
+            }
         }
 
         Ok((
@@ -156,10 +169,10 @@ impl SymbolTable {
     }
 
     pub fn deserialize_segment(
-        header: &SymbolTableSegmentHeader,
+        header: &SegmentHeader,
         data: &[u8],
     ) -> Result<(usize, Self), SerializationError> {
-        let required_size = (header.entry_count as usize * 12) + header.names_length as usize;
+        let required_size = header.disk_bit_count as usize;
         if data.len() < required_size {
             return Err(SerializationError::DataTooShort);
         }
@@ -168,7 +181,7 @@ impl SymbolTable {
         let mut entries = Vec::new();
 
         // Read entries
-        for _ in 0..header.entry_count {
+        for _ in 0..header.address_space_size {
             if offset + 12 > data.len() {
                 return Err(SerializationError::DataTooShort);
             }
@@ -178,7 +191,7 @@ impl SymbolTable {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-            ]) as usize;
+            ]);
             offset += 4;
 
             let addr = u32::from_le_bytes([
@@ -194,10 +207,10 @@ impl SymbolTable {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-            ]) as usize;
+            ]);
             offset += 4;
 
-            if name_offset >= header.names_length as usize {
+            if name_offset >= header.disk_bit_count as u32 - header.address_space_size as u32 * 12 {
                 return Err(SerializationError::InvalidData);
             }
 
@@ -209,10 +222,7 @@ impl SymbolTable {
         }
 
         // Read names
-        if offset + header.names_length as usize > data.len() {
-            return Err(SerializationError::DataTooShort);
-        }
-        let names = data[offset..offset + header.names_length as usize].to_vec();
+        let names = data[offset..header.disk_bit_count as usize].to_vec();
 
         // Validate that all names are properly null-terminated
         if !names.iter().any(|&b| b == 0) {
@@ -220,18 +230,18 @@ impl SymbolTable {
         }
 
         Ok((
-            offset + header.names_length as usize,
+            header.disk_bit_count as usize,
             SymbolTable { entries, names },
         ))
     }
 
-    pub fn get_symbols(&self, section_id: usize) -> Vec<Symbol> {
+    pub fn get_symbols(&self, section_id: u32) -> Vec<Symbol> {
         self.entries
             .iter()
             .filter(|entry| entry.section_id == section_id)
             .map(|entry| {
                 let mut name = String::new();
-                let mut i = entry.name_offset;
+                let mut i = entry.name_offset as usize;
                 while i < self.names.len() && self.names[i] != 0 {
                     name.push(self.names[i] as char);
                     i += 1;

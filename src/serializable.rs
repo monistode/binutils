@@ -13,7 +13,7 @@ pub trait Serializable: Sized {
     fn deserialize(data: &[u8]) -> Result<(usize, Self), SerializationError>;
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Architecture {
     Stack = 0,
 }

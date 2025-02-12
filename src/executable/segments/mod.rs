@@ -1,7 +1,6 @@
 pub mod common;
+pub mod flags;
 pub mod header;
-pub mod text;
 
 pub use common::Segment;
-pub use header::{SegmentHeader, SymbolTableHeader, TextSegmentHeader};
-pub use text::TextSegment;
+pub use header::SegmentHeader;

@@ -11,7 +11,7 @@ use crate::{Architecture, Serializable, SerializationError, SymbolTable};
 
 #[derive(Debug, Clone)]
 pub struct ObjectFile {
-    header: ObjectHeader,
+    architecture: Architecture,
     sections: Vec<Section>,
 }
 
@@ -25,16 +25,16 @@ impl Serializable for ObjectFile {
 
         for (section_id, section) in self.sections.iter().enumerate() {
             for symbol in section.symbols() {
-                symbol_table.add_symbol(section_id, symbol);
+                symbol_table.add_symbol(section_id as u32, symbol);
             }
             for relocation in section.relocations() {
-                relocation_table.add_relocation(section_id, relocation);
+                relocation_table.add_relocation(section_id as u32, relocation);
             }
         }
 
         // Serialize header with all sections (including symbol and relocation tables)
         let header = ObjectHeader {
-            architecture: self.header.architecture,
+            architecture: self.architecture,
             section_count: self.sections.len() as u64 + 2, // +2 for symbol and relocation tables
         };
         data.extend(header.serialize());
@@ -116,7 +116,7 @@ impl Serializable for ObjectFile {
         // Calculate offsets to symbol and relocation tables
         let mut section_data_offset = offset;
         for header in &headers[..section_count - 2] {
-            section_data_offset += header.section_size();
+            section_data_offset += header.section_size() as usize;
         }
 
         // Load symbol and relocation tables first
@@ -129,7 +129,7 @@ impl Serializable for ObjectFile {
             &data[symbol_offset..],
         )?;
 
-        let relocation_offset = symbol_offset + headers[section_count - 2].section_size();
+        let relocation_offset = symbol_offset + headers[section_count - 2].section_size() as usize;
         let (_, relocation_table) = RelocationTable::deserialize(
             match &headers[section_count - 1] {
                 SectionHeader::RelocationTable(h) => h,
@@ -145,12 +145,11 @@ impl Serializable for ObjectFile {
         for (idx, section_header) in headers[..section_count - 2].iter().enumerate() {
             match section_header {
                 SectionHeader::Text(_) => {
-                    let symbols = symbol_table.get_symbols(idx);
-                    let relocations = relocation_table.get_relocations(idx);
+                    let symbols = symbol_table.get_symbols(idx as u32);
+                    let relocations = relocation_table.get_relocations(idx as u32);
                     let (size, section) = Section::deserialize(
                         section_header,
                         &data[current_offset..],
-                        header.architecture,
                         symbols,
                         relocations,
                     )?;
@@ -162,8 +161,11 @@ impl Serializable for ObjectFile {
         }
 
         Ok((
-            relocation_offset + headers[section_count - 1].section_size(),
-            ObjectFile { header, sections },
+            relocation_offset + headers[section_count - 1].section_size() as usize,
+            ObjectFile {
+                architecture: header.architecture,
+                sections,
+            },
         ))
     }
 }
@@ -171,21 +173,20 @@ impl Serializable for ObjectFile {
 impl ObjectFile {
     pub fn new(architecture: Architecture) -> Self {
         ObjectFile {
-            header: ObjectHeader::new(architecture, 0),
+            architecture,
             sections: Vec::new(),
         }
     }
 
     pub fn with_sections(architecture: Architecture, sections: Vec<Section>) -> Self {
         ObjectFile {
-            header: ObjectHeader::new(architecture, sections.len() as u64),
+            architecture,
             sections,
         }
     }
 
     pub fn add_section(&mut self, section: Section) {
         self.sections.push(section);
-        self.header.section_count = self.sections.len() as u64;
     }
 
     pub fn sections(self) -> Vec<Section> {
@@ -193,6 +194,13 @@ impl ObjectFile {
     }
 
     pub fn architecture(&self) -> Architecture {
-        self.header.architecture
+        self.architecture
+    }
+
+    pub fn merge(&mut self, other: ObjectFile) {
+        if self.architecture != other.architecture {
+            panic!("Cannot merge object files with different architectures");
+        }
+        self.sections.extend(other.sections);
     }
 }

@@ -32,7 +32,7 @@ impl From<SectionType> for u8 {
 
 #[derive(Debug, Clone)]
 pub struct TextSectionHeader {
-    pub bit_length: u64,
+    pub bit_length: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -90,7 +90,7 @@ impl Serializable for SectionHeader {
             0 => {
                 let bit_length = u64::from_le_bytes([
                     data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
-                ]);
+                ]) as usize;
                 Ok((16, SectionHeader::Text(TextSectionHeader { bit_length })))
             }
             255 | 254 => {
@@ -115,16 +115,15 @@ impl Serializable for SectionHeader {
 }
 
 impl SectionHeader {
-    pub fn section_size(&self) -> usize {
+    pub fn section_size(&self) -> u64 {
         match self {
-            SectionHeader::Text(header) => (header.bit_length as usize + 7) / 8,
+            SectionHeader::Text(header) => (header.bit_length as u64 + 7) / 8,
             SectionHeader::SymbolTable(header) => {
-                (header.entry_count as usize * 12) + header.names_length as usize
+                (header.entry_count as u64 * 12) + header.names_length as u64
             }
             SectionHeader::RelocationTable(header) => {
-                (header.entry_count as usize * 16) + header.names_length as usize
+                (header.entry_count as u64 * 16) + header.names_length as u64
             }
         }
     }
 }
-

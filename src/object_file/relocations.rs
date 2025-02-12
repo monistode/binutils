@@ -11,7 +11,7 @@ pub struct Relocation {
 
 #[derive(Debug, Clone)]
 struct RelocationEntry {
-    section_id: usize,
+    section_id: u32,
     symbol_offset: usize,
     address: Address,
     relative: bool,
@@ -31,7 +31,7 @@ impl RelocationTable {
         }
     }
 
-    pub fn add_relocation(&mut self, section_id: usize, relocation: Relocation) {
+    pub fn add_relocation(&mut self, section_id: u32, relocation: Relocation) {
         let symbol_offset = self.names.len();
         self.names.extend(relocation.symbol.as_bytes());
         self.names.push(0); // null terminator
@@ -49,7 +49,7 @@ impl RelocationTable {
 
         // Entries
         for entry in &self.entries {
-            data.extend((entry.section_id as u32).to_le_bytes());
+            data.extend(entry.section_id.to_le_bytes());
             data.extend((entry.symbol_offset as u32).to_le_bytes());
             data.extend((entry.address.0 as u32).to_le_bytes());
             data.push(entry.relative as u8);
@@ -92,7 +92,7 @@ impl RelocationTable {
                 data[offset + 1],
                 data[offset + 2],
                 data[offset + 3],
-            ]) as usize;
+            ]);
             offset += 4;
 
             let symbol_offset = u32::from_le_bytes([
@@ -133,8 +133,10 @@ impl RelocationTable {
         let names = data[offset..offset + header.names_length as usize].to_vec();
 
         // Validate that all names are properly null-terminated
-        if !names.iter().any(|&b| b == 0) {
-            return Err(SerializationError::InvalidData);
+        if names.len() > 0 {
+            if !names.iter().any(|&b| b == 0) {
+                return Err(SerializationError::InvalidData);
+            }
         }
 
         Ok((
@@ -143,13 +145,13 @@ impl RelocationTable {
         ))
     }
 
-    pub fn get_relocations(&self, section_id: usize) -> Vec<Relocation> {
+    pub fn get_relocations(&self, section_id: u32) -> Vec<Relocation> {
         self.entries
             .iter()
             .filter(|entry| entry.section_id == section_id)
             .map(|entry| {
                 let mut symbol = String::new();
-                let mut i = entry.symbol_offset;
+                let mut i = entry.symbol_offset as usize;
                 while i < self.names.len() && self.names[i] != 0 {
                     symbol.push(self.names[i] as char);
                     i += 1;

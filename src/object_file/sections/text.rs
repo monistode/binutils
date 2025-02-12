@@ -37,7 +37,6 @@ impl TextSection {
     pub fn deserialize(
         header: &TextSectionHeader,
         data: &[u8],
-        architecture: Architecture,
         symbols: Vec<Symbol>,
         relocations: Vec<Relocation>,
     ) -> Result<(usize, Self), SerializationError> {
@@ -46,23 +45,19 @@ impl TextSection {
             return Err(SerializationError::DataTooShort);
         }
 
-        match architecture {
-            Architecture::Stack => {
-                let mut bits = BitVec::new();
-                for i in 0..header.bit_length as usize {
-                    let bit = data[i / 8] & (1 << (i % 8)) != 0;
-                    bits.push(bit);
-                }
-                let bytes_read = (header.bit_length + 7) as usize / 8;
-                Ok((
-                    bytes_read,
-                    TextSection {
-                        data: bits,
-                        symbols,
-                        relocations,
-                    },
-                ))
-            }
+        let mut bits = BitVec::new();
+        for i in 0..header.bit_length as usize {
+            let bit = data[i / 8] & (1 << (i % 8)) != 0;
+            bits.push(bit);
         }
+        let bytes_read = (header.bit_length + 7) as usize / 8;
+        Ok((
+            bytes_read,
+            TextSection {
+                data: bits,
+                symbols,
+                relocations,
+            },
+        ))
     }
 }

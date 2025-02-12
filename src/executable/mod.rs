@@ -1,5 +1,5 @@
 pub use header::ExecutableHeader;
-pub use segments::{Segment, SegmentHeader, SymbolTableHeader};
+pub use segments::{Segment, SegmentHeader};
 
 use crate::{Architecture, Serializable, SerializationError, SymbolTable};
 
@@ -22,7 +22,7 @@ impl Serializable for Executable {
 
         for (segment_id, segment) in self.segments.iter().enumerate() {
             for symbol in segment.symbols() {
-                symbol_table.add_symbol(segment_id, symbol);
+                symbol_table.add_symbol(segment_id as u32, symbol);
             }
         }
 
@@ -30,6 +30,7 @@ impl Serializable for Executable {
         let header = ExecutableHeader {
             architecture: self.header.architecture,
             segment_count: self.segments.len() as u64 + 1, // +1 for symbol table
+            entry_point: self.header.entry_point,
         };
         data.extend(header.serialize());
 
@@ -84,14 +85,16 @@ impl Serializable for Executable {
         if segment_count < 1 {
             return Err(SerializationError::InvalidData);
         }
-        if !matches!(headers[segment_count - 1], SegmentHeader::SymbolTable(_)) {
+        if !headers[segment_count - 1].flags.special
+            || !headers[segment_count - 1].address_space_start == 0
+        {
             return Err(SerializationError::InvalidData);
         }
 
         // Ensure no other symbol table segments exist
         if headers[..segment_count - 1]
             .iter()
-            .any(|h| matches!(h, SegmentHeader::SymbolTable(_)))
+            .any(|h| h.flags.special && h.address_space_start == 0)
         {
             return Err(SerializationError::InvalidData);
         }
@@ -102,35 +105,21 @@ impl Serializable for Executable {
             segment_data_offset += header.segment_size();
         }
 
-        // Load symbol and relocation tables first
+        // Load symbol table first
         let symbol_offset = segment_data_offset;
-        let (_, symbol_table) = SymbolTable::deserialize_segment(
-            match &headers[segment_count - 1] {
-                SegmentHeader::SymbolTable(h) => h,
-                _ => unreachable!(),
-            },
-            &data[symbol_offset..],
-        )?;
+        let (_, symbol_table) =
+            SymbolTable::deserialize_segment(&headers[segment_count - 1], &data[symbol_offset..])?;
 
         // Process regular segments
         let mut segments = Vec::new();
         let mut current_offset = offset;
 
         for (idx, segment_header) in headers[..segment_count - 1].iter().enumerate() {
-            match segment_header {
-                SegmentHeader::Text(_) => {
-                    let symbols = symbol_table.get_symbols(idx);
-                    let (size, segment) = Segment::deserialize(
-                        segment_header,
-                        &data[current_offset..],
-                        header.architecture,
-                        symbols,
-                    )?;
-                    segments.push(segment);
-                    current_offset += size;
-                }
-                _ => return Err(SerializationError::InvalidData),
-            }
+            let symbols = symbol_table.get_symbols(idx as u32);
+            let (size, segment) =
+                Segment::deserialize(segment_header, &data[current_offset..], symbols)?;
+            segments.push(segment);
+            current_offset += size;
         }
 
         Ok((
@@ -154,5 +143,13 @@ impl Executable {
 
     pub fn segments_mut(&mut self) -> &mut Vec<Segment> {
         &mut self.segments
+    }
+
+    pub fn architecture(&self) -> Architecture {
+        self.header.architecture
+    }
+
+    pub fn entry_point(&self) -> u64 {
+        self.header.entry_point
     }
 }
