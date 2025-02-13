@@ -16,6 +16,7 @@ pub trait Serializable: Sized {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Architecture {
     Stack = 0,
+    Risc = 2,
 }
 
 impl TryFrom<u8> for Architecture {
@@ -24,6 +25,7 @@ impl TryFrom<u8> for Architecture {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Architecture::Stack),
+            2 => Ok(Architecture::Risc),
             v => Err(SerializationError::InvalidArchitecture(v)),
         }
     }

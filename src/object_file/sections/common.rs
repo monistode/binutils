@@ -56,6 +56,7 @@ impl Section {
     pub fn to_segment(&self, placement: &Placement, offset: usize) -> Result<Segment, LinkerError> {
         let text_byte_width: usize = match placement.architecture() {
             Architecture::Stack => 6,
+            Architecture::Risc => 8,
         };
         match self {
             Section::Text(text) => {
