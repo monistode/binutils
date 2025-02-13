@@ -8,7 +8,8 @@ pub mod segments;
 
 #[derive(Debug, Clone)]
 pub struct Executable {
-    header: ExecutableHeader,
+    architecture: Architecture,
+    entry_point: u64,
     segments: Vec<Segment>,
 }
 
@@ -28,9 +29,9 @@ impl Serializable for Executable {
 
         // Serialize header with all segments (including symbol table)
         let header = ExecutableHeader {
-            architecture: self.header.architecture,
+            architecture: self.architecture,
             segment_count: self.segments.len() as u64 + 1, // +1 for symbol table
-            entry_point: self.header.entry_point,
+            entry_point: self.entry_point,
         };
         data.extend(header.serialize());
 
@@ -124,7 +125,11 @@ impl Serializable for Executable {
 
         Ok((
             symbol_offset + headers[segment_count - 1].segment_size(), // TODO sure?
-            Executable { header, segments },
+            Executable {
+                architecture: header.architecture,
+                entry_point: header.entry_point,
+                segments,
+            },
         ))
     }
 }
@@ -132,8 +137,9 @@ impl Serializable for Executable {
 impl Executable {
     pub fn new(architecture: Architecture, segments: Vec<Segment>) -> Self {
         Executable {
-            header: ExecutableHeader::new(architecture, 0),
+            architecture,
             segments,
+            entry_point: 0,
         }
     }
 
@@ -146,10 +152,10 @@ impl Executable {
     }
 
     pub fn architecture(&self) -> Architecture {
-        self.header.architecture
+        self.architecture
     }
 
     pub fn entry_point(&self) -> u64 {
-        self.header.entry_point
+        self.entry_point
     }
 }

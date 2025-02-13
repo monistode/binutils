@@ -15,7 +15,7 @@ impl Serializable for SegmentHeader {
         let mut data = Vec::new();
         data.extend(self.address_space_start.to_le_bytes());
         data.extend(self.address_space_size.to_le_bytes());
-        data.extend(self.disk_bit_count.to_le_bytes());
+        data.extend((self.disk_bit_count as u64).to_le_bytes());
         data.extend(self.flags.serialize());
         data
     }
