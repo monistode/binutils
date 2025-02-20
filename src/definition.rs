@@ -13,6 +13,8 @@ pub struct RawRegisterGroup {
 pub enum RawArgumentDefinition {
     #[serde(rename = "register")]
     Register { group: String },
+    #[serde(rename = "register_address")]
+    RegisterAddress { group: String },
     #[serde(rename = "data_address")]
     DataAddress { bits: u8 },
     #[serde(rename = "text_address")]
@@ -67,6 +69,7 @@ impl From<RawRegisterGroup> for RegisterGroup {
 #[derive(Debug)]
 pub enum ArgumentDefinition {
     Register { group: RegisterGroup },
+    RegisterAddress { group: RegisterGroup },
     DataAddress { bits: u8 },
     TextAddress { bits: u8 },
     Padding { bits: u8 },
@@ -77,6 +80,7 @@ impl ArgumentDefinition {
     pub fn size(&self) -> u8 {
         match self {
             ArgumentDefinition::Register { group } => group.length,
+            ArgumentDefinition::RegisterAddress { group } => group.length,
             ArgumentDefinition::DataAddress { bits } => *bits,
             ArgumentDefinition::TextAddress { bits } => *bits,
             ArgumentDefinition::Padding { bits } => *bits,
@@ -96,6 +100,12 @@ impl TryFrom<(RawArgumentDefinition, HashMap<String, RegisterGroup>)> for Argume
                 Some(g) => Ok(ArgumentDefinition::Register { group: g.clone() }),
                 None => Err("Register group not found"),
             },
+            (RawArgumentDefinition::RegisterAddress { group }, groups) => {
+                match groups.get(&group) {
+                    Some(g) => Ok(ArgumentDefinition::RegisterAddress { group: g.clone() }),
+                    None => Err("Register group not found"),
+                }
+            }
             (RawArgumentDefinition::DataAddress { bits }, _) => {
                 Ok(ArgumentDefinition::DataAddress { bits })
             }
