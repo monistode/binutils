@@ -40,6 +40,7 @@ impl PlacedSection {
     pub fn size(&self, architecture: Architecture) -> usize {
         let text_byte_width = match architecture {
             Architecture::Stack => 6,
+            Architecture::Accumulator => 8,
             Architecture::Risc => 8,
         };
         match &self.section {
